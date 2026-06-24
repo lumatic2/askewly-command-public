@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Askewly Command",
+    "github_url": "https://github.com/lumatic2/askewly-command-public",
+    "description": "Desktop, mobile, and agent CLI command center for a shared task and project graph."
+  },
+  {
+    "name": "Portfolio Site",
+    "github_url": "https://github.com/example/portfolio-site",
+    "description": "Example portfolio project used as sanitized demo context."
+  },
+  {
+    "name": "Agent CLI Demo",
+    "github_url": "https://github.com/example/agent-cli-demo",
+    "description": "Example project for showing natural-language agent commands mapped to explicit CLI payloads."
+  }
+]

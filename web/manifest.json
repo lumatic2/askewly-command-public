@@ -1,0 +1,9 @@
+{
+  "name": "Askewly Command",
+  "short_name": "Askewly Command",
+  "description": "Public landing page for the Askewly Command mobile app and desktop widget.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#FDF7ED",
+  "theme_color": "#FDF7ED"
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.askewly.command.server</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/&lt;user&gt;/.nvm/versions/node/v24.14.0/bin/node</string>
+    <string>/Users/&lt;user&gt;/projects/askewly-command-server/server.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/&lt;user&gt;/projects/askewly-command-server</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/Users/&lt;user&gt;/.nvm/versions/node/v24.14.0/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>/Users/&lt;user&gt;</string>
+    <key>PORT</key>
+    <string>3001</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/&lt;user&gt;/Library/Logs/askewly-command-server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/&lt;user&gt;/Library/Logs/askewly-command-server.log</string>
+</dict>
+</plist>

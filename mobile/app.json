@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "커맨드",
+    "slug": "askewly-command-mobile",
+    "scheme": "askewlycommand",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.askewly.command",
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "backgroundColor": "#C4A9D9",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "androidStatusBar": {
+      "translucent": false
+    },
+    "plugins": [
+      "expo-web-browser",
+      [
+        "expo-navigation-bar",
+        {
+          "style": "light",
+          "hidden": false,
+          "enforceContrast": false
+        }
+      ]
+    ],
+    "extra": {
+      "authRedirectPath": "auth"
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

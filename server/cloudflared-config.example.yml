@@ -1,0 +1,7 @@
+tunnel: <cloudflare-tunnel-id>
+credentials-file: /path/to/.cloudflared/<cloudflare-tunnel-id>.json
+
+ingress:
+  - hostname: dashboard.askewly.com
+    service: http://localhost:3001
+  - service: http_status:404

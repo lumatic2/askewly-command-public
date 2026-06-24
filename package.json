@@ -1,0 +1,46 @@
+{
+  "name": "askewly-command",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Askewly Command desktop control tower for tasks, projects, and personal operations.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web:dev": "npm --prefix web run dev --",
+    "web:build": "npm --prefix web run build",
+    "web:deploy": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/deploy-public-landing-worker.ps1",
+    "web:preview": "npm --prefix web run preview",
+    "capture-preview": "electron ./scripts/capture-preview.js",
+    "sync-today-cache": "node ./scripts/sync-today-cache.js",
+    "verify:supabase-schema": "node ./scripts/verify-supabase-schema.js",
+    "verify:shared-task-contract": "node ./scripts/verify-shared-task-contract.js",
+    "verify:desktop-cloud-schedule": "node ./scripts/verify-desktop-cloud-schedule.js",
+    "verify:desktop-board-parity": "node ./scripts/verify-desktop-board-parity.js",
+    "verify:desktop-command-graph-parity": "node ./scripts/verify-desktop-command-graph-parity.js",
+    "verify:desktop-command-graph-operations": "node ./scripts/verify-desktop-command-graph-operations.js",
+    "verify:desktop-cloud-session": "node ./scripts/verify-desktop-cloud-session.js",
+    "verify:daily-rollover": "node ./scripts/verify-daily-rollover.js --dry-run",
+    "verify:project-task-link": "node ./scripts/verify-project-task-link.js",
+    "verify:project-roadmap-layer": "node ./scripts/verify-project-roadmap-layer.js",
+    "verify:project-link-layer": "node ./scripts/verify-project-link-layer.js",
+    "verify:command-graph-contract": "node ./scripts/verify-command-graph-contract.js",
+    "verify:command-overview": "node ./scripts/verify-command-overview.js",
+    "askewly": "node ./scripts/askewly-command.js",
+    "verify:agent-command-intake": "node ./scripts/verify-agent-command-intake.js",
+    "verify:public-readiness": "node ./scripts/verify-public-readiness.js",
+    "verify:rls-isolation": "node ./scripts/verify-rls-isolation.js",
+    "verify:cross-device-sync": "node ./scripts/verify-cross-device-sync.js",
+    "import:legacy-schedule": "node ./scripts/import-legacy-schedule-to-cloud.js",
+    "export:cloud-schedule": "node ./scripts/export-cloud-schedule-for-cron.js",
+    "test:schedule-interactions": "electron ./scripts/test-schedule-interactions.js",
+    "install-startup": "powershell -ExecutionPolicy Bypass -File ./scripts/install-startup-shortcut.ps1",
+    "dist": "electron-packager . \"Askewly Command\" --platform=win32 --arch=x64 --out=release --overwrite && powershell -NoProfile -Command \"if (Test-Path 'release/Askewly Command-win32-x64.zip') { Remove-Item 'release/Askewly Command-win32-x64.zip' -Force }; Compress-Archive -Path 'release/Askewly Command-win32-x64/*' -DestinationPath 'release/Askewly Command-win32-x64.zip'\""
+  },
+  "devDependencies": {
+    "@electron/packager": "^19.1.0",
+    "electron": "^37.2.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.108.2"
+  }
+}
