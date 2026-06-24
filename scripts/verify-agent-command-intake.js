@@ -32,6 +32,9 @@ async function verifyDryRun() {
   const help = runNode(['scripts/askewly-command.js', '--help']);
   assert(help.includes('projects list'), 'CLI help missing projects list');
   assert(help.includes('tasks add'), 'CLI help missing tasks add');
+  assert(help.includes('tasks list'), 'CLI help missing tasks list');
+  assert(help.includes('tasks search'), 'CLI help missing tasks search');
+  assert(help.includes('tasks recent'), 'CLI help missing tasks recent');
 
   const dryRun = await seedProjects({ dryRun: true, file: SEED_PATH });
   assert(dryRun.dryRun === true, 'Seed dry-run did not report dryRun');
@@ -108,6 +111,46 @@ async function verifyLiveIfAvailable() {
   ]);
   const dueTask = JSON.parse(dueOutput);
   assert(dueTask.due_at === '2026-06-25T09:00:00+00:00' || dueTask.due_at === '2026-06-25T09:00:00.000Z', 'CLI due datetime did not normalize to expected UTC time');
+  const listOutput = runNode([
+    'scripts/askewly-command.js',
+    'tasks',
+    'list',
+    '--section',
+    'deadlines',
+    '--project',
+    'Askewly Command',
+    '--limit',
+    '10',
+    '--json'
+  ]);
+  const listedTasks = JSON.parse(listOutput);
+  assert(Array.isArray(listedTasks), 'CLI list did not return an array');
+  assert(listedTasks.some((candidate) => candidate.id === dueTask.id && candidate.section === 'deadlines' && candidate.project_name === 'Askewly Command'), 'CLI list did not include due verifier task');
+
+  const searchOutput = runNode([
+    'scripts/askewly-command.js',
+    'tasks',
+    'search',
+    '--query',
+    String(dueTask.title).slice(0, 16),
+    '--limit',
+    '10',
+    '--json'
+  ]);
+  const searchedTasks = JSON.parse(searchOutput);
+  assert(searchedTasks.some((candidate) => candidate.id === dueTask.id), 'CLI search did not find due verifier task');
+
+  const recentOutput = runNode([
+    'scripts/askewly-command.js',
+    'tasks',
+    'recent',
+    '--limit',
+    '10',
+    '--json'
+  ]);
+  const recentTasks = JSON.parse(recentOutput);
+  assert(recentTasks.some((candidate) => candidate.id === dueTask.id), 'CLI recent did not include due verifier task');
+
   await request(cloudConfig, `tasks?id=eq.${dueTask.id}&workspace_id=eq.${workspace.id}`, {
     method: 'PATCH',
     prefer: 'return=minimal',

@@ -57,6 +57,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-askewly-cl
 
 ```powershell
 askewly projects list
+askewly tasks recent --limit 5
+askewly tasks list --section today --limit 10
+askewly tasks search --query "포트폴리오" --limit 10
 askewly tasks add --title "포트폴리오 데모 마감" --section deadlines --due "2026-06-25 18:00" --project "Askewly Command"
 askewly tasks update --id 431 --due "2026-06-26"
 askewly tasks move --id 431 --section backlog

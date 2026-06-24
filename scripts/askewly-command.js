@@ -20,6 +20,9 @@ function usage() {
     '  node scripts/askewly-command.js projects create --name NAME [--description TEXT] [--github-url URL] [--json]',
     '  node scripts/askewly-command.js projects seed [--dry-run|--live] [--file path]',
     '  node scripts/askewly-command.js tasks add --title TITLE [--section today|deadlines|backlog] [--detail TEXT] [--project NAME] [--status STATUS] [--due DATE] [--json]',
+    '  node scripts/askewly-command.js tasks list [--section today|deadlines|backlog] [--status STATUS|active|all] [--project NAME] [--limit N] [--json]',
+    '  node scripts/askewly-command.js tasks search --query TEXT [--section today|deadlines|backlog] [--status STATUS|active|all] [--project NAME] [--limit N] [--json]',
+    '  node scripts/askewly-command.js tasks recent [--limit N] [--json]',
     '  node scripts/askewly-command.js tasks update --id ID [--title TITLE] [--detail TEXT] [--project NAME|--no-project] [--due DATE|--clear-due] [--json]',
     '  node scripts/askewly-command.js tasks move --id ID --section today|deadlines|backlog [--due DATE] [--scheduled-for YYYY-MM-DD] [--json]',
     '  node scripts/askewly-command.js tasks status --id ID --status todo|doing|done|held|delayed|archived [--json]',
@@ -85,9 +88,22 @@ function printResult(value, json) {
 
 function formatRow(row) {
   if (!row || typeof row !== 'object') return String(row);
-  if (row.title) return `${row.id}: ${row.title}`;
+  if (row.title) {
+    const meta = [
+      row.section || null,
+      row.status || null,
+      row.project_name ? `project=${row.project_name}` : null,
+      row.due_at ? `due=${formatDateForRow(row.due_at)}` : null,
+      row.scheduled_for ? `scheduled=${row.scheduled_for}` : null
+    ].filter(Boolean).join(' · ');
+    return `${row.id}: ${row.title}${meta ? ` [${meta}]` : ''}`;
+  }
   if (row.name) return `${row.id}: ${row.name}${row.github_url ? ` <${row.github_url}>` : ''}`;
   return JSON.stringify(row);
+}
+
+function formatDateForRow(value) {
+  return String(value || '').replace(/\.\d{3}Z$/, 'Z');
 }
 
 async function commandContext() {
@@ -140,6 +156,84 @@ async function getTask(context, id) {
   const task = tasks?.[0];
   if (!task?.id) throw new Error(`Task not found: ${id}`);
   return task;
+}
+
+async function loadTaskSources(context) {
+  const sources = await request(
+    context.cloudConfig,
+    `task_sources?select=id,key,kind,label&workspace_id=eq.${context.workspace.id}`
+  );
+  return sources || [];
+}
+
+async function listTasks(context, flags = {}) {
+  const sources = await loadTaskSources(context);
+  const sourceById = new Map(sources.map((source) => [source.id, source]));
+  const sourceByKey = new Map(sources.map((source) => [source.key, source]));
+  const section = flags.section ? assertSection(flags.section) : null;
+  const project = await findProjectByName(context, flags.project);
+  const limit = parseLimit(flags.limit, 20);
+  const status = normalizeStatusFilter(flags.status || 'active');
+  const searchQuery = flags.query !== undefined ? requireFlag(flags, 'query').trim() : null;
+
+  let restPath = 'tasks?select=id,source_id,project_id,title,detail,status,due_at,scheduled_for,sort_order,created_at,updated_at,archived_at';
+  restPath += `&workspace_id=eq.${context.workspace.id}`;
+  if (section) restPath += `&source_id=eq.${sourceByKey.get(section)?.id || -1}`;
+  if (project) restPath += `&project_id=eq.${project.id}`;
+  if (status.mode === 'status') restPath += `&status=eq.${encodeURIComponent(status.value)}`;
+  if (status.mode === 'active') restPath += '&status=neq.archived';
+  if (searchQuery) {
+    const escaped = escapeIlikeValue(searchQuery);
+    restPath += `&or=(title.ilike.*${escaped}*,detail.ilike.*${escaped}*)`;
+  }
+  restPath += flags._order || '&order=source_id.asc&order=sort_order.asc&order=created_at.asc';
+  restPath += `&limit=${limit}`;
+
+  const tasks = await request(context.cloudConfig, restPath);
+  return enrichTasks(context, tasks || [], sourceById);
+}
+
+async function recentTasks(context, flags = {}) {
+  return listTasks(context, {
+    ...flags,
+    status: flags.status || 'active',
+    _order: '&order=updated_at.desc&order=created_at.desc'
+  });
+}
+
+async function enrichTasks(context, tasks, sourceById) {
+  const projectIds = [...new Set(tasks.map((task) => task.project_id).filter(Boolean))];
+  const projectById = new Map();
+  if (projectIds.length) {
+    const projects = await request(
+      context.cloudConfig,
+      `projects?select=id,name&workspace_id=eq.${context.workspace.id}&id=in.(${projectIds.join(',')})`
+    );
+    for (const project of projects || []) projectById.set(project.id, project);
+  }
+  return tasks.map((task) => ({
+    ...task,
+    section: sourceById.get(task.source_id)?.key || null,
+    project_name: projectById.get(task.project_id)?.name || null
+  }));
+}
+
+function parseLimit(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new Error('--limit must be an integer between 1 and 100');
+  return limit;
+}
+
+function normalizeStatusFilter(value) {
+  const raw = String(value || 'active').trim();
+  if (raw === 'all') return { mode: 'all' };
+  if (raw === 'active') return { mode: 'active' };
+  return { mode: 'status', value: assertStatus(raw) };
+}
+
+function escapeIlikeValue(value) {
+  return encodeURIComponent(String(value).replace(/[%*]/g, ''));
 }
 
 async function nextSortOrder(context, sourceId) {
@@ -314,6 +408,19 @@ async function run(argv) {
   }
   if (domain === 'tasks' && action === 'add') {
     printResult(await addTask(context, flags), flags.json);
+    return;
+  }
+  if (domain === 'tasks' && action === 'list') {
+    printResult(await listTasks(context, flags), flags.json);
+    return;
+  }
+  if (domain === 'tasks' && action === 'search') {
+    if (!flags.query) throw new Error('--query is required');
+    printResult(await listTasks(context, flags), flags.json);
+    return;
+  }
+  if (domain === 'tasks' && action === 'recent') {
+    printResult(await recentTasks(context, flags), flags.json);
     return;
   }
   if (domain === 'tasks' && action === 'update') {
