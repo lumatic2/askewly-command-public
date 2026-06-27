@@ -74,7 +74,7 @@ const DEFAULT_DASHBOARD_CONFIG = {
     remote: {
       enabled: true,
       host: 'user@m4',
-      baseDir: '~/vault/30-projects/schedule'
+      baseDir: '~/path/to/schedule'
     },
     paths: {
       schedule: '',
@@ -2400,7 +2400,7 @@ async function pushProjectsSnapshot() {
     await new Promise((resolve, reject) => {
       const child = require('child_process').spawn(
         'ssh',
-        ['-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=5', host, 'cat > ~/projects-snapshot.json'],
+        ['-o', 'StrictHostKeyChecking=accept-new', '-o', 'ConnectTimeout=5', host, 'cat > ~/askewly-command-projects-snapshot.json'],
         { windowsHide: true }
       );
       child.stdin.write(json);

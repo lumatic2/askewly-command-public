@@ -203,7 +203,7 @@ function loadLegacyActiveSchedule(options = {}) {
 
   if (scheduleItems.length === 0 && backlogItems.length === 0 && paths.remote?.enabled) {
     const host = paths.remote.host || 'user@m4';
-    const baseDir = paths.remote.baseDir || '~/vault/30-projects/schedule';
+    const baseDir = paths.remote.baseDir || '~/path/to/schedule';
     scheduleItems = parseRemoteMarkdownSections(host, `${baseDir}/SCHEDULE.md`);
     backlogItems = parseRemoteMarkdownSections(host, `${baseDir}/BACKLOG.md`);
     sourceMode = 'remote';

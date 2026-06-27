@@ -337,7 +337,7 @@ function main() {
     backlogArchiveItems = parseMarkdownSections(backlogArchivePath);
     recurringArchiveItems = parseMarkdownSections(recurringArchivePath);
   } else if (remoteConfig.enabled) {
-    const baseDir = remoteConfig.baseDir || '~/vault/30-projects/schedule';
+    const baseDir = remoteConfig.baseDir || '~/path/to/schedule';
     const host = remoteConfig.host || 'user@m4';
     scheduleItems = parseMarkdownSectionsFromText(readRemoteText(host, `${baseDir}/SCHEDULE.md`));
     backlogItems = parseMarkdownSectionsFromText(readRemoteText(host, `${baseDir}/BACKLOG.md`));
