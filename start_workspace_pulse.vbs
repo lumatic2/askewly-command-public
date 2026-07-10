@@ -26,6 +26,6 @@ If Not fso.FileExists(electronPath) Then
   WScript.Quit 1
 End If
 
-command = """" & electronPath & """ ."
+command = """" & electronPath & """ .\widget\main.js"
 shell.CurrentDirectory = projectRoot
 shell.Run command, 0, False

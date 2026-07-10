@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Askewly Command Widget v2</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav id="rail" class="rail">
+    <button type="button" class="rail-btn" data-view="today" title="오늘">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      <span class="rail-label">오늘</span>
+    </button>
+    <button type="button" class="rail-btn" data-view="calendar" title="달력">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>
+      <span class="rail-label">달력</span>
+    </button>
+    <button type="button" class="rail-btn" data-view="backlog" title="백로그">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+      <span class="rail-label">백로그</span>
+    </button>
+    <button type="button" class="rail-btn" data-view="projects" title="프로젝트">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+      <span class="rail-label">프로젝트</span>
+    </button>
+  </nav>
+
+  <div class="main-col">
+    <header id="header">
+      <span id="date-line">--</span>
+      <div class="header-right">
+        <span id="stale-badge" class="stale-badge" hidden>업데이트 지연</span>
+        <div class="header-controls">
+          <button type="button" id="btn-settings" class="header-icon-btn" title="설정">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button type="button" id="btn-quit" class="header-icon-btn" title="위젯 끄기">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div id="settings-popover" class="popover" hidden>
+      <div class="popover-section">
+        <div class="popover-label">글자 크기</div>
+        <div class="scale-options" id="scale-options">
+          <button type="button" class="scale-btn" data-scale="0.85">작게</button>
+          <button type="button" class="scale-btn" data-scale="1">기본</button>
+          <button type="button" class="scale-btn" data-scale="1.15">크게</button>
+          <button type="button" class="scale-btn" data-scale="1.3">더 크게</button>
+        </div>
+      </div>
+      <div class="popover-section">
+        <div class="toggle-row">
+          <span class="popover-label">항상 위</span>
+          <label class="switch">
+            <input type="checkbox" id="always-on-top-toggle" />
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <main id="app">
+      <div class="view" id="view-today">
+        <section class="section" id="section-events">
+          <h2 class="section-label">일정</h2>
+          <div class="section-body" id="events-body"></div>
+        </section>
+
+        <section class="section" id="section-today">
+          <h2 class="section-label">TODAY</h2>
+          <div class="quick-add" id="quick-add">
+            <input type="text" id="quick-add-input" class="quick-add-input" placeholder="+ 할 일 추가" autocomplete="off" />
+          </div>
+          <div class="section-body" id="today-body"></div>
+        </section>
+
+        <section class="section" id="section-projects" hidden>
+          <h2 class="section-label">핀 프로젝트</h2>
+          <div class="section-body chips" id="projects-body"></div>
+        </section>
+      </div>
+
+      <div class="view" id="view-calendar" hidden>
+        <section class="section">
+          <div class="cal-header">
+            <button type="button" class="cal-nav-btn" id="cal-prev" title="이전 달">‹</button>
+            <span class="cal-month-label" id="cal-month-label">--</span>
+            <button type="button" class="cal-nav-btn" id="cal-next" title="다음 달">›</button>
+            <button type="button" class="cal-today-btn" id="cal-today-btn">오늘</button>
+          </div>
+          <div class="cal-weekdays">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+          </div>
+          <div class="cal-grid" id="cal-grid"></div>
+          <div class="cal-day-detail" id="cal-day-detail"></div>
+        </section>
+      </div>
+
+      <div class="view" id="view-backlog" hidden>
+        <section class="section">
+          <h2 class="section-label">백로그</h2>
+          <div class="quick-add" id="quick-add-backlog">
+            <input type="text" id="quick-add-backlog-input" class="quick-add-input" placeholder="+ 할 일 추가" autocomplete="off" />
+          </div>
+          <div class="section-body" id="backlog-body"></div>
+        </section>
+      </div>
+
+      <div class="view" id="view-projects" hidden>
+        <section class="section">
+          <h2 class="section-label">프로젝트</h2>
+          <div class="section-body" id="projects-catalog-body"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="state.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

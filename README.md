@@ -1,101 +1,114 @@
 # Askewly Command
 
-> 데스크톱 위젯, Expo 모바일 앱, 에이전트용 CLI가 같은 Supabase 일정·프로젝트 그래프를 공유하는 개인용 커맨드 센터입니다.
+> 개인용 Google 생태계 기반 작업·일정 컨트롤러. 항상 떠 있는 Windows 위젯 + Expo 모바일 앱 + agent-facing CLI가 같은 Google Workspace 데이터(Tasks·Calendar·Sheets)를 읽고 쓴다.
 
-## 포트폴리오 요약
+![Widget](assets/widget-screenshot.png)
 
-Askewly Command는 작업 맥락이 캘린더, GitHub, 로컬 프로젝트, 메모, AI 코딩 세션에 흩어지는 문제를 다룹니다. 핵심은 단순 todo 앱이 아니라 **PC 위젯, 모바일 앱, AI 에이전트 세션이 같은 작업 상태를 보고 조작하는 구조**입니다.
+## What it is
 
-- **케이스 스터디**: [`docs/portfolio-case-study-m52.md`](docs/portfolio-case-study-m52.md)
-- **데모 스크립트**: [`docs/portfolio-demo-script-m52.md`](docs/portfolio-demo-script-m52.md)
-- **핵심 차별점**: Codex/Claude Code가 자연어 요청을 검증된 `askewly` CLI 명령으로 바꿔 같은 task workspace를 업데이트합니다. 에이전트가 DB에 직접 쓰지 않고 앱 계약을 통과합니다.
-- **현재 경계**: 개인용 command center가 우선입니다. 스토어 배포, 팀 공유, 결제, public task API는 의도적으로 제외했습니다.
+흩어진 일정과 할 일을 오늘 실행 가능한 상태로 붙잡아두는 개인 명령 센터다. 할 일은 Google Tasks, 시간 일정·마감은 Google Calendar, 프로젝트 카탈로그는 Google Sheets에 있고, PC 위젯·모바일 앱·`askewly` CLI 세 표면이 같은 데이터를 조작한다. 자체 백엔드는 없다 — Supabase 시대 코드는 2026-07-10 M74에서 완전 제거됐다(ADR 0008).
 
-## 무엇을 만들었나
+## Portfolio Snapshot
 
-작업과 프로젝트 컨텍스트는 Supabase workspace에 저장됩니다. Electron 데스크톱 위젯, Expo 모바일 앱, `askewly` CLI는 같은 애플리케이션 계약을 사용해 Today, Deadlines, Backlog, Project link를 읽고 씁니다.
+Askewly Command is an agent-native personal command center: a Windows desktop widget, an Expo mobile app, and a local `askewly` CLI all operate on the owner's Google Workspace data (Tasks, Calendar, Sheets). It is a personal product by design — no store release, no multi-user story.
 
-이 repo는 공개 포트폴리오용 snapshot입니다. 원본 private repo의 히스토리, 개인 운영 로그, local QA 산출물은 포함하지 않았습니다.
+- **Strongest signal**: Codex/Claude Code turn natural language into validated `askewly` CLI commands, so agent sessions update the same task/schedule/catalog data the widget and mobile app render — no direct database shortcuts.
+- **Current boundary**: personal command center only; store distribution, team sharing, and billing are intentionally out of scope. Public surfaces exist as portfolio evidence.
 
-## 구조
+## Architecture
 
-```text
-Codex / Claude Code
-        |
-        v
-  askewly local CLI
-        |
-        v
-Supabase Auth + Postgres
-        |
-   +----+----+
-   |         |
-Electron   Expo Mobile
-Desktop    App
+```
+┌──────────────────────┐  ┌──────────────────────┐  ┌──────────────────────┐
+│ Windows widget       │  │ Expo mobile app      │  │ askewly CLI          │
+│ (Electron, widget/)  │  │ (mobile-v2/)         │  │ (scripts/)           │
+└──────────┬───────────┘  └──────────┬───────────┘  └──────────┬───────────┘
+           │ Google OAuth            │ native Google OAuth     │ gws token cache
+           └──────────────┬──────────┴──────────────┬──────────┘
+                          ▼                         ▼
+              Google Tasks · Google Calendar · Google Sheets
+              (할 일)       (시간 일정·마감)     (프로젝트 카탈로그)
 ```
 
-GitHub, Google Calendar, Notion, private vault adapter 같은 주변 소스는 작업 맥락을 보강하는 역할입니다. active schedule의 기본 write path는 Supabase이고, legacy markdown schedule은 import/fallback 용도입니다.
+**세 클라이언트, 한 데이터 층**: 위젯·모바일·CLI가 전부 Google Workspace REST를 직접 호출한다. 마감(Deadline)은 Calendar 종일 이벤트로 관리하고, Askewly 전용 메타데이터(프로젝트 연결·상태)는 Google Tasks notes에 보존된다.
 
-## 주요 표면
+**Agent command surface**: `askewly` CLI는 Codex/Claude Code 세션이 자연어 요청을 명시 command payload로 바꿔 일정과 프로젝트를 조작하는 로컬 도구다. 직접 SQL·private API 대신 앱과 같은 계약을 사용한다.
 
-| 표면 | 역할 |
-|---|---|
-| Electron 데스크톱 위젯 | PC에서 항상 보이는 일정, command overview, status surface |
-| Expo 모바일 앱 | Today, Deadlines, Backlog, Focus review, 상태 변경, 프로젝트 연결 |
-| `askewly` CLI | Codex/Claude Code 세션에서 쓰는 로컬 command surface |
-| Public web | private task API 없이 제품을 설명하는 landing page |
+## Surfaces
 
-## 에이전트 CLI
+| 표면 | 구성 | 특징 |
+|---|---|---|
+| **Widget** (`widget/`) | 오늘 중심 단일 컬럼 + 달력 탭 + 프로젝트 레일 | 우측 세로 모니터 상시 표시, optimistic CRUD, 오프라인 fallback |
+| **Mobile** (`mobile-v2/`) | 오늘/달력/백로그/프로젝트 탭 | 네이티브 Google 로그인, 위젯과 같은 데이터 왕복 |
+| **CLI** (`scripts/askewly-command.js`) | tasks·projects 명령 | 에이전트가 검증된 payload로 조작 |
+| **Landing** (`web/`) | dashboard.askewly.com | 정적 포트폴리오 페이지 (Cloudflare Worker) |
 
-Windows 전역 shim 설치:
+## Quick Start
+
+```powershell
+cd $env:USERPROFILE\projects\askewly-command
+npm install
+npm start
+```
+
+또는 콘솔 창 없이:
+
+```powershell
+wscript .\start_workspace_pulse.vbs
+```
+
+Windows 시작프로그램 등록:
+
+```powershell
+npm run install-startup
+```
+
+## Agent CLI
+
+Install the global Windows shim:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-askewly-cli.ps1
 ```
 
-사용 예:
+Use it from any shell:
 
 ```powershell
 askewly projects list
-askewly tasks recent --limit 5
-askewly tasks list --section today --limit 10
-askewly tasks search --query "포트폴리오" --limit 10
-askewly tasks add --title "포트폴리오 데모 마감" --section deadlines --due "2026-06-25 18:00" --project "Askewly Command"
-askewly tasks update --id 431 --due "2026-06-26"
-askewly tasks move --id 431 --section backlog
-askewly tasks status --id 431 --status done
+askewly tasks add --title "교수님들 메일" --section today --project "Askewly Command"
+askewly tasks add --title "마감 보고" --section deadlines --due "2026-06-25 18:00"
+askewly tasks update --id TASKID --due "2026-06-26"
+askewly tasks move --id TASKID --section backlog
+askewly tasks status --id TASKID --status done
 ```
 
-`--due`는 `YYYY-MM-DD`, `YYYY-MM-DD HH:mm`, ISO datetime을 받습니다. 날짜만 넣으면 KST 23:59로 처리합니다.
+`--due` accepts `YYYY-MM-DD`, `YYYY-MM-DD HH:mm`, and ISO datetimes. Date-only values are treated as KST 23:59.
 
-## 실행
+## Repo layout
 
-데스크톱 앱:
+```
+askewly-command/
+├── widget/                     # Electron widget v2 (main.js, renderer/, data-service)
+├── mobile-v2/                  # Expo React Native app (Google-native rebuild)
+├── web/                        # Vite React public landing → Cloudflare Worker assets
+├── scripts/
+│   ├── askewly-command.js      # Agent-facing CLI (Google Tasks/Calendar/Sheets)
+│   ├── lib/google-workspace-*.js  # Google REST adapters
+│   ├── install-askewly-cli.ps1 # Global Windows askewly shim
+│   └── verify-*.js             # Contract/verification gates
+├── docs/                       # ADRs, plans, milestone evidence
+└── assets/widget-screenshot.png
+```
+
+## Deploy public landing
 
 ```powershell
-npm install
-npm start
+npm run web:deploy
 ```
 
-모바일 앱:
+This builds `web/`, deploys `web/dist` as Cloudflare Worker static assets.
 
-```powershell
-cd mobile
-npm install
-npm run typecheck
-```
+## See also
 
-공개 준비 검증:
-
-```powershell
-npm run verify:public-readiness
-```
-
-## 더 보기
-
-- [`docs/portfolio-case-study-m52.md`](docs/portfolio-case-study-m52.md) — 포트폴리오 케이스 스터디
-- [`docs/portfolio-demo-script-m52.md`](docs/portfolio-demo-script-m52.md) — 짧은 데모 스크립트
-- [`docs/PRD.md`](docs/PRD.md) — 제품 요구사항
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 아키텍처 노트
-- [`docs/onboarding.md`](docs/onboarding.md) — cloud mode 온보딩
-- [`docs/credential-checklist.md`](docs/credential-checklist.md) — Supabase/OAuth/native credential 체크리스트
+- [`ROADMAP.md`](ROADMAP.md) — 마일스톤·완료 이력
+- [`CLAUDE.md`](CLAUDE.md) — 에이전트 작업 컨텍스트
+- [`docs/adr/0008-legacy-supabase-decommission.md`](docs/adr/0008-legacy-supabase-decommission.md) — Supabase 시대 청산 기록

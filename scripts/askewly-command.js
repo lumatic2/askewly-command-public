@@ -1,24 +1,25 @@
 'use strict';
 
-const {
-  getCloudConfig,
-  getTaskSource,
-  loadWorkspaceContext,
-  normalizeName,
-  normalizeNullableText,
-  request
-} = require('./lib/askewly-cloud');
-const { seedProjects } = require('./seed-project-context');
+const googleTasks = require('./lib/google-workspace-tasks');
+const googleCatalog = require('./lib/google-workspace-catalog');
 
 const VALID_SECTIONS = new Set(['today', 'deadlines', 'backlog']);
 const VALID_STATUSES = new Set(['todo', 'doing', 'done', 'held', 'delayed', 'archived']);
+const VALID_PROJECT_STATUSES = new Set(['active', 'paused', 'archived']);
+
+const REMOVED_COMMANDS = new Map([
+  ['auth', 'Supabase desktop auth was decommissioned (M74, 2026-07-10). Google auth uses the gws token cache; no CLI auth step is needed.'],
+  ['projects seed', 'Supabase-only `projects seed` was removed (M74, 2026-07-10). Manage the catalog with projects create/update on the Google Sheets backend.']
+]);
 
 function usage() {
   return [
     'Usage:',
-    '  node scripts/askewly-command.js projects list [--json]',
-    '  node scripts/askewly-command.js projects create --name NAME [--description TEXT] [--github-url URL] [--json]',
-    '  node scripts/askewly-command.js projects seed [--dry-run|--live] [--file path]',
+    '  node scripts/askewly-command.js projects list [--status active|paused|archived|all] [--pinned] [--json]',
+    '  node scripts/askewly-command.js projects show (--name NAME|--id ID) [--json]',
+    '  node scripts/askewly-command.js projects create --name NAME [--description TEXT] [--github-url URL] [--objective TEXT] [--horizon TEXT] [--roadmap-note TEXT] [--pinned] [--json]',
+    '  node scripts/askewly-command.js projects update (--name NAME|--id ID) [--new-name NAME] [--description TEXT] [--github-url URL] [--objective TEXT] [--horizon TEXT] [--roadmap-note TEXT] [--status active|paused|archived] [--json]',
+    '  node scripts/askewly-command.js projects pin|unpin|archive (--name NAME|--id ID) [--json]',
     '  node scripts/askewly-command.js tasks add --title TITLE [--section today|deadlines|backlog] [--detail TEXT] [--project NAME] [--status STATUS] [--due DATE] [--json]',
     '  node scripts/askewly-command.js tasks list [--section today|deadlines|backlog] [--status STATUS|active|all] [--project NAME] [--limit N] [--json]',
     '  node scripts/askewly-command.js tasks search --query TEXT [--section today|deadlines|backlog] [--status STATUS|active|all] [--project NAME] [--limit N] [--json]',
@@ -27,6 +28,7 @@ function usage() {
     '  node scripts/askewly-command.js tasks move --id ID --section today|deadlines|backlog [--due DATE] [--scheduled-for YYYY-MM-DD] [--json]',
     '  node scripts/askewly-command.js tasks status --id ID --status todo|doing|done|held|delayed|archived [--json]',
     '',
+    'Backend: Google Workspace only (Tasks + Calendar + Sheets catalog). Supabase paths were removed in M74.',
     'Natural language belongs to the agent. This CLI accepts explicit validated command payloads only.'
   ].join('\n');
 }
@@ -40,7 +42,7 @@ function parseFlags(argv) {
       continue;
     }
     const key = value.slice(2);
-    if (key === 'json' || key === 'dry-run' || key === 'live' || key === 'no-project' || key === 'clear-due' || key === 'help') {
+    if (key === 'json' || key === 'no-project' || key === 'clear-due' || key === 'help' || key === 'pinned') {
       flags[key] = true;
       continue;
     }
@@ -58,12 +60,6 @@ function requireFlag(flags, name) {
   return String(value);
 }
 
-function parseId(value, label) {
-  const id = Number(value);
-  if (!Number.isInteger(id) || id <= 0) throw new Error(`${label} must be a positive integer`);
-  return id;
-}
-
 function assertSection(section) {
   if (!VALID_SECTIONS.has(section)) throw new Error(`Invalid section: ${section}`);
   return section;
@@ -72,6 +68,23 @@ function assertSection(section) {
 function assertStatus(status) {
   if (!VALID_STATUSES.has(status)) throw new Error(`Invalid status: ${status}`);
   return status;
+}
+
+function assertProjectStatus(status) {
+  if (!VALID_PROJECT_STATUSES.has(status)) throw new Error(`Invalid project status: ${status}`);
+  return status;
+}
+
+function requireTaskId(flags) {
+  const id = requireFlag(flags, 'id').trim();
+  if (!id) throw new Error('Task id is required');
+  return id;
+}
+
+function normalizeNullableText(value) {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text === '' ? null : text;
 }
 
 function printResult(value, json) {
@@ -98,7 +111,14 @@ function formatRow(row) {
     ].filter(Boolean).join(' · ');
     return `${row.id}: ${row.title}${meta ? ` [${meta}]` : ''}`;
   }
-  if (row.name) return `${row.id}: ${row.name}${row.github_url ? ` <${row.github_url}>` : ''}`;
+  if (row.name) {
+    const meta = [
+      row.status || null,
+      isProjectPinned(row) ? 'pinned' : null,
+      row.current_horizon ? `horizon=${row.current_horizon}` : null
+    ].filter(Boolean).join(' · ');
+    return `${row.id}: ${isProjectPinned(row) ? '* ' : ''}${row.name}${meta ? ` [${meta}]` : ''}${row.github_url ? ` <${row.github_url}>` : ''}`;
+  }
   return JSON.stringify(row);
 }
 
@@ -106,116 +126,8 @@ function formatDateForRow(value) {
   return String(value || '').replace(/\.\d{3}Z$/, 'Z');
 }
 
-async function commandContext() {
-  const cloudConfig = await getCloudConfig();
-  const { workspace, profile } = await loadWorkspaceContext(cloudConfig);
-  return { cloudConfig, workspace, profile };
-}
-
-async function listProjects(context) {
-  return request(
-    context.cloudConfig,
-    `projects?select=id,name,description,github_url,status&workspace_id=eq.${context.workspace.id}&status=neq.archived&order=sort_order.asc&order=created_at.asc`
-  );
-}
-
-async function findProjectByName(context, name) {
-  if (!name) return null;
-  const projects = await listProjects(context);
-  const project = (projects || []).find((candidate) => normalizeName(candidate.name) === normalizeName(name));
-  if (!project) throw new Error(`Project not found: ${name}`);
-  return project;
-}
-
-async function createProject(context, flags) {
-  const name = requireFlag(flags, 'name').trim();
-  if (!name) throw new Error('Project name is required');
-  const existing = (await listProjects(context)).find((project) => normalizeName(project.name) === normalizeName(name));
-  if (existing) return existing;
-  const created = await request(context.cloudConfig, 'projects', {
-    method: 'POST',
-    body: {
-      workspace_id: context.workspace.id,
-      name,
-      description: normalizeNullableText(flags.description),
-      github_url: normalizeNullableText(flags['github-url']),
-      status: 'active',
-      sort_order: Math.floor(Date.now() / 1000),
-      created_by: context.profile.id,
-      updated_by: context.profile.id
-    }
-  });
-  return created?.[0];
-}
-
-async function getTask(context, id) {
-  const tasks = await request(
-    context.cloudConfig,
-    `tasks?select=id,workspace_id,source_id,project_id,project_milestone_id,title,detail,status,due_at,scheduled_for,sort_order&workspace_id=eq.${context.workspace.id}&id=eq.${id}&limit=1`
-  );
-  const task = tasks?.[0];
-  if (!task?.id) throw new Error(`Task not found: ${id}`);
-  return task;
-}
-
-async function loadTaskSources(context) {
-  const sources = await request(
-    context.cloudConfig,
-    `task_sources?select=id,key,kind,label&workspace_id=eq.${context.workspace.id}`
-  );
-  return sources || [];
-}
-
-async function listTasks(context, flags = {}) {
-  const sources = await loadTaskSources(context);
-  const sourceById = new Map(sources.map((source) => [source.id, source]));
-  const sourceByKey = new Map(sources.map((source) => [source.key, source]));
-  const section = flags.section ? assertSection(flags.section) : null;
-  const project = await findProjectByName(context, flags.project);
-  const limit = parseLimit(flags.limit, 20);
-  const status = normalizeStatusFilter(flags.status || 'active');
-  const searchQuery = flags.query !== undefined ? requireFlag(flags, 'query').trim() : null;
-
-  let restPath = 'tasks?select=id,source_id,project_id,title,detail,status,due_at,scheduled_for,sort_order,created_at,updated_at,archived_at';
-  restPath += `&workspace_id=eq.${context.workspace.id}`;
-  if (section) restPath += `&source_id=eq.${sourceByKey.get(section)?.id || -1}`;
-  if (project) restPath += `&project_id=eq.${project.id}`;
-  if (status.mode === 'status') restPath += `&status=eq.${encodeURIComponent(status.value)}`;
-  if (status.mode === 'active') restPath += '&status=neq.archived';
-  if (searchQuery) {
-    const escaped = escapeIlikeValue(searchQuery);
-    restPath += `&or=(title.ilike.*${escaped}*,detail.ilike.*${escaped}*)`;
-  }
-  restPath += flags._order || '&order=source_id.asc&order=sort_order.asc&order=created_at.asc';
-  restPath += `&limit=${limit}`;
-
-  const tasks = await request(context.cloudConfig, restPath);
-  return enrichTasks(context, tasks || [], sourceById);
-}
-
-async function recentTasks(context, flags = {}) {
-  return listTasks(context, {
-    ...flags,
-    status: flags.status || 'active',
-    _order: '&order=updated_at.desc&order=created_at.desc'
-  });
-}
-
-async function enrichTasks(context, tasks, sourceById) {
-  const projectIds = [...new Set(tasks.map((task) => task.project_id).filter(Boolean))];
-  const projectById = new Map();
-  if (projectIds.length) {
-    const projects = await request(
-      context.cloudConfig,
-      `projects?select=id,name&workspace_id=eq.${context.workspace.id}&id=in.(${projectIds.join(',')})`
-    );
-    for (const project of projects || []) projectById.set(project.id, project);
-  }
-  return tasks.map((task) => ({
-    ...task,
-    section: sourceById.get(task.source_id)?.key || null,
-    project_name: projectById.get(task.project_id)?.name || null
-  }));
+function isProjectPinned(project) {
+  return Number(project?.sort_order || 0) < 0;
 }
 
 function parseLimit(value, fallback) {
@@ -225,128 +137,108 @@ function parseLimit(value, fallback) {
   return limit;
 }
 
-function normalizeStatusFilter(value) {
-  const raw = String(value || 'active').trim();
-  if (raw === 'all') return { mode: 'all' };
-  if (raw === 'active') return { mode: 'active' };
-  return { mode: 'status', value: assertStatus(raw) };
+function validateGoogleTaskPayload(action, flags) {
+  if (flags.section !== undefined) assertSection(flags.section);
+  if (flags.status !== undefined && !['active', 'all'].includes(String(flags.status))) assertStatus(flags.status);
+  if (flags.limit !== undefined) parseLimit(flags.limit, 20);
+  if (flags.due !== undefined || flags['due-at'] !== undefined) parseDueAt(flags.due || flags['due-at']);
+  if (flags['scheduled-for'] !== undefined) parseScheduleDate(flags['scheduled-for']);
+  if (action === 'add') {
+    const title = requireFlag(flags, 'title').trim();
+    if (!title) throw new Error('Task title is required');
+  }
+  if (action === 'search') {
+    const query = requireFlag(flags, 'query').trim();
+    if (!query) throw new Error('--query is required');
+  }
+  if (['update', 'move', 'status'].includes(action)) requireTaskId(flags);
+  if (action === 'move') assertSection(requireFlag(flags, 'section'));
+  if (action === 'status') assertStatus(requireFlag(flags, 'status'));
 }
 
-function escapeIlikeValue(value) {
-  return encodeURIComponent(String(value).replace(/[%*]/g, ''));
+function runGoogleTaskCommand(action, flags) {
+  validateGoogleTaskPayload(action, flags);
+  if (action === 'add') return googleTasks.addTask(flags);
+  if (action === 'list') return googleTasks.listTasks(flags);
+  if (action === 'search') return googleTasks.listTasks(flags);
+  if (action === 'recent') return googleTasks.listTasks({ ...flags, status: flags.status || 'active' });
+  if (action === 'update') return googleTasks.updateTask(flags);
+  if (action === 'move') return googleTasks.moveTask(flags);
+  if (action === 'status') return googleTasks.setTaskStatus(flags);
+  throw new Error(`Unknown command: tasks ${action}`);
 }
 
-async function nextSortOrder(context, sourceId) {
-  const rows = await request(
-    context.cloudConfig,
-    `tasks?select=sort_order&workspace_id=eq.${context.workspace.id}&source_id=eq.${sourceId}&status=neq.archived&order=sort_order.desc&limit=1`
-  );
-  return Number(rows?.[0]?.sort_order || 0) + 10;
+function validateGoogleProjectSelector(flags) {
+  if (flags.id !== undefined && flags.id !== null && String(flags.id).trim() !== '') return;
+  requireFlag(flags, 'name');
 }
 
-async function addTask(context, flags) {
-  const title = requireFlag(flags, 'title').trim();
-  if (!title) throw new Error('Task title is required');
-  const section = assertSection(flags.section || 'today');
-  const status = assertStatus(flags.status || 'todo');
-  const source = await getTaskSource(context.cloudConfig, context.workspace.id, section);
-  const project = await findProjectByName(context, flags.project);
-  const created = await request(context.cloudConfig, 'tasks', {
-    method: 'POST',
-    body: {
-      workspace_id: context.workspace.id,
-      source_id: source.id,
-      project_id: project?.id ?? null,
-      title,
-      detail: normalizeNullableText(flags.detail),
-      status,
-      sort_order: await nextSortOrder(context, source.id),
-      created_by: context.profile.id,
-      updated_by: context.profile.id,
-      ...sectionDateFields(section, flags)
-    }
-  });
-  return created?.[0];
+function validateGoogleProjectPayload(action, flags) {
+  if (flags.status && flags.status !== 'all') assertProjectStatus(flags.status);
+  if (['show', 'update', 'pin', 'unpin', 'archive'].includes(action)) validateGoogleProjectSelector(flags);
+  if (action === 'create') requireFlag(flags, 'name');
+  if (action === 'update' && flags.status) assertProjectStatus(flags.status);
 }
 
-async function updateTask(context, flags) {
-  const id = parseId(requireFlag(flags, 'id'), 'Task id');
-  await getTask(context, id);
+function projectObjectiveFlag(flags) {
+  return flags.objective !== undefined ? flags.objective : flags['north-star'];
+}
+
+function buildGoogleProjectPatch(flags) {
   const patch = {};
-  if (flags.title !== undefined) patch.title = requireFlag(flags, 'title').trim();
-  if (flags.detail !== undefined) patch.detail = normalizeNullableText(flags.detail);
-  if (flags['clear-due']) {
-    patch.due_at = null;
-  } else if (flags.due !== undefined || flags['due-at'] !== undefined) {
-    patch.due_at = parseDueAt(flags.due || flags['due-at']);
+  if (flags['new-name'] !== undefined) {
+    const nextName = String(flags['new-name']).trim();
+    if (!nextName) throw new Error('--new-name cannot be empty');
+    patch.name = nextName;
   }
-  if (flags['no-project']) {
-    patch.project_id = null;
-  } else if (flags.project !== undefined) {
-    const project = await findProjectByName(context, flags.project);
-    patch.project_id = project?.id ?? null;
+  if (flags.description !== undefined) patch.description = normalizeNullableText(flags.description);
+  if (flags['github-url'] !== undefined) patch.github_url = normalizeNullableText(flags['github-url']);
+  if (projectObjectiveFlag(flags) !== undefined) patch.north_star = normalizeNullableText(projectObjectiveFlag(flags));
+  if (flags.horizon !== undefined) patch.current_horizon = normalizeNullableText(flags.horizon);
+  if (flags['roadmap-note'] !== undefined) patch.roadmap_note = normalizeNullableText(flags['roadmap-note']);
+  if (flags.status !== undefined) {
+    const status = assertProjectStatus(flags.status);
+    patch.status = status;
+    patch.archived_at = status === 'archived' ? new Date().toISOString() : null;
   }
-  if (Object.keys(patch).length === 0) throw new Error('No task update fields provided');
-  const updated = await request(context.cloudConfig, `tasks?id=eq.${id}&workspace_id=eq.${context.workspace.id}`, {
-    method: 'PATCH',
-    body: {
-      ...patch,
-      updated_by: context.profile.id
-    }
-  });
-  return updated?.[0];
+  return patch;
 }
 
-async function moveTask(context, flags) {
-  const id = parseId(requireFlag(flags, 'id'), 'Task id');
-  const section = assertSection(requireFlag(flags, 'section'));
-  await getTask(context, id);
-  const source = await getTaskSource(context.cloudConfig, context.workspace.id, section);
-  const updated = await request(context.cloudConfig, `tasks?id=eq.${id}&workspace_id=eq.${context.workspace.id}`, {
-    method: 'PATCH',
-    body: {
-      source_id: source.id,
-      sort_order: await nextSortOrder(context, source.id),
-      updated_by: context.profile.id,
-      ...sectionDateFields(section, flags)
-    }
-  });
-  return updated?.[0];
-}
-
-async function setTaskStatus(context, flags) {
-  const id = parseId(requireFlag(flags, 'id'), 'Task id');
-  const status = assertStatus(requireFlag(flags, 'status'));
-  await getTask(context, id);
-  const updated = await request(context.cloudConfig, `tasks?id=eq.${id}&workspace_id=eq.${context.workspace.id}`, {
-    method: 'PATCH',
-    body: {
-      status,
-      archived_at: status === 'archived' ? new Date().toISOString() : undefined,
-      updated_by: context.profile.id
-    }
-  });
-  return updated?.[0];
-}
-
-function sectionDateFields(section, flags = {}) {
-  if (section === 'today') {
-    return {
-      scheduled_for: parseScheduleDate(flags['scheduled-for']) || kstDateString(),
-      due_at: flags.due || flags['due-at'] ? parseDueAt(flags.due || flags['due-at']) : null
-    };
+function runGoogleProjectCommand(action, flags) {
+  validateGoogleProjectPayload(action, flags);
+  if (action === 'list') {
+    const projects = googleCatalog.listProjects({ status: flags.status });
+    return flags.pinned ? projects.filter((project) => Number(project.sort_order || 0) < 0) : projects;
   }
-  if (section === 'deadlines') {
-    return {
-      scheduled_for: null,
-      due_at: flags.due || flags['due-at'] ? parseDueAt(flags.due || flags['due-at']) : new Date().toISOString()
-    };
+  if (action === 'show') {
+    return googleCatalog.showProject({ name: flags.name, id: flags.id });
   }
-  return { scheduled_for: null, due_at: null };
-}
-
-function kstDateString(date = new Date()) {
-  return new Date(date.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (action === 'create') {
+    return googleCatalog.createProject({
+      name: requireFlag(flags, 'name').trim(),
+      description: normalizeNullableText(flags.description),
+      github_url: normalizeNullableText(flags['github-url']),
+      north_star: normalizeNullableText(projectObjectiveFlag(flags)),
+      current_horizon: normalizeNullableText(flags.horizon),
+      roadmap_note: normalizeNullableText(flags['roadmap-note']),
+      pinned: Boolean(flags.pinned)
+    });
+  }
+  if (action === 'update') {
+    const patch = buildGoogleProjectPatch(flags);
+    if (Object.keys(patch).length === 0) throw new Error('No project fields to update');
+    return googleCatalog.updateProject({ name: flags.name, id: flags.id }, patch);
+  }
+  if (action === 'pin') {
+    return googleCatalog.setProjectPinned({ name: flags.name, id: flags.id }, true);
+  }
+  if (action === 'unpin') {
+    return googleCatalog.setProjectPinned({ name: flags.name, id: flags.id }, false);
+  }
+  if (action === 'archive') {
+    return googleCatalog.archiveProject({ name: flags.name, id: flags.id });
+  }
+  throw new Error(`Unknown command: projects ${action}`);
 }
 
 function parseScheduleDate(value) {
@@ -382,57 +274,28 @@ function kstLocalToIso(localDateTime) {
   return parsed.toISOString();
 }
 
+function removedCommandMessage(domain, action) {
+  if (REMOVED_COMMANDS.has(domain)) return REMOVED_COMMANDS.get(domain);
+  const key = [domain, action].filter(Boolean).join(' ');
+  if (REMOVED_COMMANDS.has(key)) return REMOVED_COMMANDS.get(key);
+  return null;
+}
+
 async function run(argv) {
   const [domain, action, ...rest] = argv;
+  const removed = removedCommandMessage(domain, action);
+  if (removed) throw new Error(removed);
   const flags = parseFlags(rest);
   if (!domain || flags.help || domain === '--help' || domain === '-h') {
     console.log(usage());
     return;
   }
-  if (domain === 'projects' && action === 'seed') {
-    await seedProjects({
-      dryRun: flags.live ? false : true,
-      file: flags.file
-    });
+  if (domain === 'tasks') {
+    printResult(runGoogleTaskCommand(action, flags), flags.json);
     return;
   }
-
-  const context = await commandContext();
-  if (domain === 'projects' && action === 'list') {
-    printResult(await listProjects(context), flags.json);
-    return;
-  }
-  if (domain === 'projects' && action === 'create') {
-    printResult(await createProject(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'add') {
-    printResult(await addTask(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'list') {
-    printResult(await listTasks(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'search') {
-    if (!flags.query) throw new Error('--query is required');
-    printResult(await listTasks(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'recent') {
-    printResult(await recentTasks(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'update') {
-    printResult(await updateTask(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'move') {
-    printResult(await moveTask(context, flags), flags.json);
-    return;
-  }
-  if (domain === 'tasks' && action === 'status') {
-    printResult(await setTaskStatus(context, flags), flags.json);
+  if (domain === 'projects') {
+    printResult(runGoogleProjectCommand(action, flags), flags.json);
     return;
   }
   throw new Error(`Unknown command: ${[domain, action].filter(Boolean).join(' ')}`);

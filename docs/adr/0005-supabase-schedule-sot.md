@@ -6,12 +6,12 @@ Accepted, 2026-06-22
 
 ## Context
 
-Askewly Command originally used local vault markdown files as the schedule source
+Askewly Command originally used M4 vault markdown files as the schedule source
 of truth:
 
-- an operator-configured schedule markdown file
-- an operator-configured backlog markdown file
-- operator-configured archive markdown files
+- `~/vault/30-projects/schedule/SCHEDULE.md`
+- `~/vault/30-projects/schedule/BACKLOG.md`
+- `~/vault/30-projects/schedule/*_ARCHIVE.md`
 
 After the Expo mobile app and Electron cloud mode started reading and writing
 Supabase, keeping automatic vault sync active caused stale writes, UI freezes,

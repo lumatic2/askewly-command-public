@@ -5,10 +5,12 @@ import {
   CheckCircle2,
   CircleHelp,
   Clock3,
+  Command,
   FolderKanban,
   GitBranch,
   LockKeyhole,
   NotebookTabs,
+  RefreshCw,
   ShieldCheck,
 } from "lucide-react";
 
@@ -24,7 +26,7 @@ const navItems = [
   { label: "FAQ", href: "#faq" },
 ];
 
-const quickFacts = ["개인 베타", "PC 위젯 + Android", "소개 전용"];
+const quickFacts = ["개인용 도구", "PC 위젯 + Android", "Google Workspace 기반"];
 
 const reviewSteps = [
   {
@@ -50,12 +52,12 @@ const faqItems = [
     a: "해야 할 일이 여러 화면과 메모에 흩어질 때, 오늘 움직일 항목을 한 곳에서 보고 상태를 바로 바꾸는 데 초점을 둡니다.",
   },
   {
-    q: "팀 협업 도구인가요?",
-    a: "현재 방향은 개인 작업 흐름에 맞춘 command workspace입니다. 반복적으로 확인해야 하는 개인 일정, 프로젝트, 다음 행동을 빠르게 다루는 경험을 우선합니다.",
+    q: "데이터는 어디에 있나요?",
+    a: "할 일은 Google Tasks, 시간 일정과 마감은 Google Calendar, 프로젝트 카탈로그는 Google Sheets에 있습니다. 자체 서버 없이 위젯·모바일 앱·CLI가 같은 Google Workspace 데이터를 직접 읽고 씁니다. AI 에이전트도 검증된 CLI 명령으로 같은 데이터를 조작합니다.",
   },
   {
-    q: "언제 사용할 수 있나요?",
-    a: "지금은 제품 경험을 다듬는 단계입니다. 공개 사용 가능 시점과 설치 방식은 준비가 끝나는 대로 이 페이지에서 안내할 예정입니다.",
+    q: "팀 협업 도구인가요? 설치할 수 있나요?",
+    a: "아니요. 제작자 개인의 작업 흐름에 맞춘 1인용 command workspace이며, 스토어 배포나 외부 설치 계획이 없습니다. 이 페이지는 실제로 매일 쓰는 개인 도구를 소개하는 포트폴리오 성격의 공개면입니다.",
   },
 ];
 
@@ -134,18 +136,171 @@ function SectionNav() {
 function HeroPreview() {
   return (
     <div className="mx-auto mt-12 w-full max-w-5xl rounded-[28px] border border-[#383838] bg-[#202020] p-3 shadow-[0_22px_70px_rgb(0_0_0_/_0.38)] sm:p-4">
-      <EmptyPreview className="aspect-[16/10] rounded-[20px]" label="메인 데모 영역" />
+      <div className="grid gap-3 rounded-[20px] border border-[#383838] bg-[#171717] p-3 md:grid-cols-[1.35fr_0.65fr]">
+        <DesktopWidgetPreview compact />
+        <MobileCommandPreview compact />
+      </div>
     </div>
   );
 }
 
-function EmptyPreview({ className = "", label }: { className?: string; label: string }) {
+function PreviewShell({
+  children,
+  className = "",
+  label,
+}: {
+  children: ReactNode;
+  className?: string;
+  label: string;
+}) {
   return (
-    <div
-      className={`border border-[#383838] bg-[#171717] ${className}`}
-      role="img"
-      aria-label={label}
-    />
+    <div className={`border border-[#383838] bg-[#111111] ${className}`} role="img" aria-label={label}>
+      {children}
+    </div>
+  );
+}
+
+const desktopTasks = [
+  "오늘 인터뷰 질문 정리",
+  "웹 공개 페이지 캡처 교체",
+  "프로젝트 메타데이터 확인",
+  "마감 전 제출 파일 점검",
+];
+
+function DesktopWidgetPreview({ compact = false }: { compact?: boolean }) {
+  return (
+    <PreviewShell
+      label="Askewly Command PC 위젯 실제 구조 미리보기"
+      className={`overflow-hidden rounded-[18px] ${compact ? "min-h-[310px]" : "aspect-[4/3]"}`}
+    >
+      <div className="flex h-full min-h-[310px] bg-[#101114] text-[#EDEDED]">
+        <aside className="flex w-[84px] shrink-0 flex-col gap-3 border-r border-[#2D2D2D] bg-[#17181D] p-3 text-[11px] font-bold text-[#8F929B]">
+          <div className="mb-2 flex items-center gap-2 text-left text-sm text-[#F5F5F5]">
+            <span className="size-2 rounded-full bg-[#D3A13F]" />
+            <span className={compact ? "sr-only" : ""}>Dashboard</span>
+          </div>
+          {["오늘", "달력", "프로젝트"].map((item) => (
+            <div
+              key={item}
+              className={`rounded-lg px-2 py-3 text-center ${item === "오늘" ? "bg-[#33291A] text-[#D3A13F] ring-1 ring-[#D3A13F]" : ""}`}
+            >
+              {item}
+            </div>
+          ))}
+        </aside>
+        <div className="min-w-0 flex-1 bg-[#141414]">
+          <div className="flex items-center justify-between border-b border-[#2D2D2D] px-4 py-3">
+            <div className="text-[12px] font-black uppercase tracking-[0.08em] text-[#A3A3A3]">오늘</div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-md border border-[#343434] px-2 py-1 text-[11px] font-bold text-[#D3A13F]">+ Add</span>
+              <RefreshCw className="size-4 text-[#8F929B]" />
+            </div>
+          </div>
+          <div className="grid gap-0 md:grid-cols-2">
+            <section className="border-b border-[#2D2D2D] bg-[#241F18] p-4 md:border-r">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-[0.08em] text-[#8FA0B8]">TODAY 할 일 4</div>
+              <div className="space-y-3">
+                {desktopTasks.slice(0, compact ? 3 : 4).map((task, index) => (
+                  <div key={task} className="flex items-start gap-3 border-b border-[#38332A] pb-3 last:border-b-0">
+                    <span className={`mt-1 size-4 rounded-full border ${index < 2 ? "border-[#5FC9B6] bg-[#173631]" : "border-[#545454]"}`} />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-black text-[#F2F2F2]">{task}</div>
+                      {index === 1 ? <div className="mt-1 text-xs text-[#9B8A62]">진행 중 · 자료 연결됨</div> : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section className="border-b border-[#2D2D2D] p-4">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-[0.08em] text-[#8FA0B8]">일정</div>
+              <div className="space-y-3">
+                {[
+                  { time: "종일", title: "D-1 지원 마감" },
+                  { time: "19:00", title: "온라인 미팅" },
+                ].map((event) => (
+                  <div key={event.title} className="flex items-center gap-3 rounded-lg border border-[#2D2D2D] bg-[#171717] px-3 py-2">
+                    <span className="shrink-0 text-[11px] font-black text-[#D3A13F]">{event.time}</span>
+                    <span className="truncate text-sm font-bold text-[#F2F2F2]">{event.title}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+            <section className="p-4 md:col-span-2">
+              <div className="mb-3 text-[11px] font-black uppercase tracking-[0.08em] text-[#8FA0B8]">프로젝트</div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {["Askewly Command", "Knowledge Graph", "Toolshelf"].map((label) => (
+                  <div key={label} className="rounded-xl border border-[#2D2D2D] bg-[#1D1D1D] p-3">
+                    <div className="text-[11px] font-black uppercase text-[#D3A13F]">Pinned</div>
+                    <div className="mt-2 truncate text-sm font-black text-[#F5F5F5]">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </PreviewShell>
+  );
+}
+
+function MobileCommandPreview({ compact = false }: { compact?: boolean }) {
+  return (
+    <PreviewShell
+      label="Askewly Command Android 앱 실제 구조 미리보기"
+      className={`mx-auto overflow-hidden rounded-[28px] ${compact ? "h-full min-h-[310px] max-w-[300px]" : "aspect-[9/16] w-full max-w-[360px]"}`}
+    >
+      <div className="flex h-full min-h-[520px] flex-col bg-[#171717] p-5 text-[#F5F5F5]">
+        <div className="flex items-center justify-between text-xs font-bold text-[#A3A3A3]">
+          <span>Askewly Command</span>
+          <RefreshCw className="size-4" />
+        </div>
+        <h3 className="mt-5 text-3xl font-black leading-none">오늘</h3>
+        <p className="mt-2 text-sm font-bold text-[#BEBEBE]">오늘의 일정과 할 일</p>
+        <div className="mt-5 flex gap-2">
+          {["일정 3", "할 일 4", "프로젝트 2"].map((item) => (
+            <span key={item} className="rounded-lg border border-[#383838] px-3 py-2 text-xs font-black text-[#DADADA]">
+              {item}
+            </span>
+          ))}
+        </div>
+        <section className="mt-5 rounded-2xl border border-[#383838] bg-[#202020] p-4">
+          <div className="text-sm font-black text-[#D3A13F]">일정</div>
+          <div className="mt-4 space-y-3 text-sm">
+            {[
+              { time: "종일", title: "D-1 지원 마감" },
+              { time: "19:00", title: "온라인 미팅" },
+            ].map((event) => (
+              <div key={event.title} className="flex items-center gap-3">
+                <span className="shrink-0 text-xs font-black text-[#D3A13F]">{event.time}</span>
+                <span className="truncate font-black">{event.title}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="mt-4 rounded-2xl border border-[#383838] bg-[#202020] p-4">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xl font-black">TODAY 할 일</h4>
+            <span className="rounded-xl border border-[#383838] px-3 py-2 text-sm font-black">4</span>
+          </div>
+          <div className="mt-4 space-y-3 text-sm">
+            {["공개 페이지 캡처 교체", "인터뷰 질문 정리", "제출 파일 점검"].map((item, index) => (
+              <div key={item} className="flex items-center gap-3">
+                <span className={`size-4 shrink-0 rounded-full border ${index === 0 ? "border-[#5FC9B6] bg-[#173631]" : "border-[#545454]"}`} />
+                <span className="truncate font-black">{item}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        <div className="mt-auto grid grid-cols-4 gap-2 border-t border-[#383838] pt-4 text-center text-[11px] font-black text-[#9A9A9A]">
+          {["오늘", "달력", "백로그", "프로젝트"].map((item) => (
+            <div key={item} className={item === "오늘" ? "text-[#D3A13F]" : ""}>
+              <Command className="mx-auto mb-1 size-5" />
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+    </PreviewShell>
   );
 }
 
@@ -182,7 +337,7 @@ function FeatureSection({
   title: string;
   body: string;
   points: string[];
-  image: React.ReactNode;
+  image: ReactNode;
   reverse?: boolean;
 }) {
   return (
@@ -373,7 +528,7 @@ export function App() {
         points={["업무 중 계속 보이는 상시 화면", "보류, 지연, 진행 중 상태를 같은 맥락에서 확인", "개인 작업 흐름에 맞춘 어두운 위젯 UI"]}
         image={
           <MediaFrame title="Desktop widget">
-            <EmptyPreview className="aspect-[4/3]" label="PC 위젯 데모 영역" />
+            <DesktopWidgetPreview />
           </MediaFrame>
         }
       />
@@ -383,11 +538,11 @@ export function App() {
         label="Android 앱"
         title="밖에서는 Android 앱으로 상태만 빠르게 바꿉니다."
         body="모바일 앱은 같은 작업 상태를 가볍게 확인하고 바꾸는 표면입니다. 이동 중에는 전체 계획보다 오늘 필요한 상태 변경에 집중합니다."
-        points={["Expo 기반 Android 앱", "PC와 같은 작업 상태를 확인", "작은 화면에서는 핵심 정보만 먼저 표시"]}
+        points={["Expo 기반 Android 앱", "Google 계정으로 로그인해 PC 위젯과 같은 데이터를 확인", "작은 화면에서는 핵심 정보만 먼저 표시"]}
         reverse
         image={
           <MediaFrame title="Android build" compact>
-            <EmptyPreview className="mx-auto aspect-[9/16] w-full max-w-[360px]" label="Android 앱 데모 영역" />
+            <MobileCommandPreview />
           </MediaFrame>
         }
       />

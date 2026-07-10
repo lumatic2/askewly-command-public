@@ -1,0 +1,37 @@
+{
+  "name": "mobile-v2",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
+    "expo": "~57.0.4",
+    "expo-auth-session": "~57.0.0",
+    "expo-constants": "~57.0.3",
+    "expo-crypto": "~57.0.0",
+    "expo-font": "~57.0.0",
+    "expo-linking": "~57.0.2",
+    "expo-router": "~57.0.4",
+    "expo-secure-store": "~57.0.0",
+    "expo-status-bar": "~57.0.0",
+    "expo-system-ui": "~57.0.0",
+    "expo-web-browser": "~57.0.0",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "4.25.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "tsx": "^4.23.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "verify:auth-config": "tsx src/auth/__checks__/verify-auth-config.ts",
+    "verify:google-client": "tsx src/google/__checks__/verify-google-client.ts"
+  },
+  "private": true
+}

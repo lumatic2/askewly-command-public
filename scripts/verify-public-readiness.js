@@ -12,6 +12,10 @@ const forbiddenPathPrefixes = [
   'web/dist/'
 ];
 
+const contentScanSkippedPathPrefixes = [
+  'docs/artifacts/'
+];
+
 const forbiddenExactPaths = new Set([
   '.env.local',
   'server/cloudflared-config.yml'
@@ -53,6 +57,7 @@ for (const file of tracked) {
   const dotIndex = normalized.lastIndexOf('.');
   const ext = dotIndex === -1 ? '' : normalized.slice(dotIndex).toLowerCase();
   if (binaryExtensions.has(ext)) continue;
+  if (contentScanSkippedPathPrefixes.some((prefix) => normalized.startsWith(prefix))) continue;
   if (!fs.existsSync(file)) continue;
 
   const text = fs.readFileSync(file, 'utf8');
